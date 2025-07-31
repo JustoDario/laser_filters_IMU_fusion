@@ -157,8 +157,10 @@ void ScanToScanFilterChain::callback(
   //If the robot roll or pitch is greater than 30 degrees dont publish the laser data
   //It might contain false obstacles like the ground level
   const double max_tilt = 30.0 * M_PI / 180.0;
+  RCLCPP_INFO(get_logger(), "ROLL: %f PITCH: %f", roll, pitch);
   if (std::fabs(roll) > max_tilt || std::fabs(pitch) > max_tilt) {
     //Discard laser lectures
+    RCLCPP_INFO(get_logger(), "Aborting msg ");
     return;
   }
 
