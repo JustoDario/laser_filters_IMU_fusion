@@ -110,6 +110,11 @@ ScanToScanFilterChain::ScanToScanFilterChain(
   #else
   output_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>("scan_filtered", 1000);
   scan_sub_.subscribe(this, "scan", rmw_qos_profile_sensor_data);
+  imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+    "/imu",                             // IMU lectures topic
+    rclcpp::SensorDataQoS(),                    // QoS de sensor
+    std::bind(&ScanToScanFilterChain::imu_callback, this, std::placeholders::_1)
+  );
   #endif
 }
 
@@ -123,17 +128,44 @@ ScanToScanFilterChain::~ScanToScanFilterChain()
     tf_.reset();
   }
 }
+//Imu callback
+void
+ScanToScanFilterChain::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
+{
+  std::lock_guard<std::mutex> lk(imu_mutex_);
+  last_orientation_ = msg->orientation;
+}
 
-// Callback
+//Laser Callback
 void ScanToScanFilterChain::callback(
   const std::shared_ptr<const sensor_msgs::msg::LaserScan> & msg_in)
 {
-  // Run the filter chain
-  if (filter_chain_.update(*msg_in, msg_)) {
-    //only publish result if filter succeeded
-    output_pub_->publish(msg_);
+    if (!filter_chain_.update(*msg_in, msg_)) {
+    return;  // If filter fails dont publish
   }
+
+  // 2)Get current roll and pitch
+  geometry_msgs::msg::Quaternion q;
+  {
+    std::lock_guard<std::mutex> lk(imu_mutex_);
+    q = last_orientation_;
+  }
+  tf2::Quaternion tf_q(q.x, q.y, q.z, q.w);
+  double roll, pitch, yaw;
+  tf2::Matrix3x3(tf_q).getRPY(roll, pitch, yaw);
+
+  //If the robot roll or pitch is greater than 30 degrees dont publish the laser data
+  //It might contain false obstacles like the ground level
+  const double max_tilt = 30.0 * M_PI / 180.0;
+  if (std::fabs(roll) > max_tilt || std::fabs(pitch) > max_tilt) {
+    //Discard laser lectures
+    return;
+  }
+
+  // 4) If all good proceed to publish
+  output_pub_->publish(msg_);
 }
+
 
 #include "rclcpp_components/register_node_macro.hpp"
 

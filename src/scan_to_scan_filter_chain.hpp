@@ -40,6 +40,10 @@
 #include "message_filters/subscriber.h"
 
 #include "filters/filter_chain.hpp"
+//IMu implementation
+#include <sensor_msgs/msg/imu.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <mutex>
 
 
 class ScanToScanFilterChain : public rclcpp::Node
@@ -51,13 +55,18 @@ protected:
 
   message_filters::Subscriber<sensor_msgs::msg::LaserScan> scan_sub_;
   std::shared_ptr<tf2_ros::MessageFilter<sensor_msgs::msg::LaserScan>> tf_filter_;
-
+  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+  void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
   // Filter Chain
   filters::FilterChain<sensor_msgs::msg::LaserScan> filter_chain_;
 
   // Components for publishing
   sensor_msgs::msg::LaserScan msg_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr output_pub_;
+
+  //IMU last orientation
+  geometry_msgs::msg::Quaternion last_orientation_;
+  std::mutex imu_mutex_;
 
   // Parameters
   #ifdef RCLCPP_SUPPORTS_MATCHED_CALLBACKS
