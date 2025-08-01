@@ -44,7 +44,11 @@ ScanToScanFilterChain::ScanToScanFilterChain(
 {
   // Heartbeat diagnostics
   diagnostic_updater_.add(heartbeat_diagnostics_);
-  
+  imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+    "/imu",                             // IMU lectures topic
+    rclcpp::SensorDataQoS(),                    // QoS de sensor
+    std::bind(&ScanToScanFilterChain::imu_callback, this, std::placeholders::_1)
+  );
   // Configure filter chain
   filter_chain_.configure(
     "",
@@ -110,11 +114,6 @@ ScanToScanFilterChain::ScanToScanFilterChain(
   #else
   output_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>("scan_filtered", 1000);
   scan_sub_.subscribe(this, "scan", rmw_qos_profile_sensor_data);
-  imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-    "/imu",                             // IMU lectures topic
-    rclcpp::SensorDataQoS(),                    // QoS de sensor
-    std::bind(&ScanToScanFilterChain::imu_callback, this, std::placeholders::_1)
-  );
   #endif
 }
 
@@ -132,6 +131,8 @@ ScanToScanFilterChain::~ScanToScanFilterChain()
 void
 ScanToScanFilterChain::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 {
+  RCLCPP_INFO(get_logger(), "Imu received\n ");
+
   std::lock_guard<std::mutex> lk(imu_mutex_);
   last_orientation_ = msg->orientation;
 }
@@ -140,6 +141,7 @@ ScanToScanFilterChain::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 void ScanToScanFilterChain::callback(
   const std::shared_ptr<const sensor_msgs::msg::LaserScan> & msg_in)
 {
+
     if (!filter_chain_.update(*msg_in, msg_)) {
     return;  // If filter fails dont publish
   }
